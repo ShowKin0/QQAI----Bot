@@ -1,0 +1,25 @@
+server:
+  host: "0.0.0.0"
+  port: 8765
+  ws_path: "/onebot/v11/ws"
+
+llm:
+  api_key: "${LLM_API_KEY}"
+  base_url: "${LLM_BASE_URL}"
+  model: "deepseek-chat"
+  temperature: 0.7
+  max_tokens: 1024
+
+session:
+  max_rounds: 10
+  expire_minutes: 30
+
+bot:
+  name: "校园助手"
+  qq: ""
+  trigger_keywords: ["卡", "流量", "套餐", "电话卡"]
+
+human_like:
+  enable_message_split: true
+  split_delay: 0.8
+  max_segment_length: 80
