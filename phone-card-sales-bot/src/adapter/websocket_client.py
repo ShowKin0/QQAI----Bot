@@ -1,7 +1,8 @@
 import json
 import asyncio
 import logging
-from typing import Callable, Awaitable, Optional
+import uuid
+from typing import Callable, Awaitable, Dict, Optional
 
 import websockets
 from websockets.server import WebSocketServerProtocol
@@ -19,6 +20,7 @@ class NapCatWSAdapter:
         self.path = path
         self._ws: Optional[WebSocketServerProtocol] = None
         self.on_message: Optional[Callable[[dict], Awaitable[None]]] = None
+        self._pending: Dict[str, asyncio.Future] = {}
 
     async def start(self) -> None:
         """Start WebSocket server and wait for NapCatQQ connection."""
@@ -32,6 +34,13 @@ class NapCatWSAdapter:
                         data = json.loads(raw)
                     except json.JSONDecodeError:
                         logger.warning("Received malformed JSON from NapCatQQ, skipping")
+                        continue
+
+                    # Check if this is a response to a pending action
+                    echo = data.get("echo")
+                    if echo and echo in self._pending:
+                        future = self._pending.pop(echo)
+                        future.set_result(data)
                         continue
 
                     logger.debug("Received: %s", data)
@@ -53,6 +62,37 @@ class NapCatWSAdapter:
             except Exception:
                 logger.exception("Unhandled error in message handler")
 
+    async def call_action(self, action: str, params: Optional[dict] = None,
+                          timeout: float = 10.0) -> Optional[dict]:
+        """Send a OneBot v11 action and wait for the response."""
+        if not self._ws:
+            logger.error("No NapCatQQ connection available")
+            return None
+
+        echo = str(uuid.uuid4())
+        payload = {
+            "action": action,
+            "params": params or {},
+            "echo": echo,
+        }
+
+        future: asyncio.Future = asyncio.get_event_loop().create_future()
+        self._pending[echo] = future
+
+        try:
+            await self._ws.send(json.dumps(payload))
+            result = await asyncio.wait_for(future, timeout=timeout)
+            return result
+        except asyncio.TimeoutError:
+            self._pending.pop(echo, None)
+            logger.warning(f"Action {action} timed out after {timeout}s")
+            return None
+        except websockets.exceptions.WebSocketException:
+            self._pending.pop(echo, None)
+            logger.exception("WebSocket error during call_action")
+            self._ws = None
+            return None
+
     async def send_message(self, user_id: Optional[int] = None,
                            group_id: Optional[int] = None,
                            message: str = "") -> bool:
@@ -64,7 +104,6 @@ class NapCatWSAdapter:
         payload = {
             "action": "send_msg",
             "params": {
-                # Use array format so NapCat won't parse CQ codes in AI output
                 "message": [{"type": "text", "data": {"text": message}}],
             },
         }

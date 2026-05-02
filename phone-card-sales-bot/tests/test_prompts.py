@@ -12,6 +12,7 @@ SAMPLE_PRODUCT = {
         },
         "features": ["可使用校园网", "自带宿舍门禁功能"],
         "target": "阿坝师范学院新生",
+        "reward": {"cashback": 5, "referral": 5},
         "faq": [
             {"q": "可以开热点吗？", "a": "可以"},
             {"q": "需要学生证吗？", "a": "不需要"},
@@ -30,17 +31,13 @@ def test_build_system_prompt_contains_product_info():
     assert "校园网" in prompt
 
 
-def test_build_system_prompt_contains_faq():
+def test_build_system_prompt_has_rewards():
     prompt = build_system_prompt(SAMPLE_PRODUCT)
-    assert "开热点" in prompt
-    assert "学生证" in prompt
-
-
-def test_build_system_prompt_has_human_tone_instructions():
-    prompt = build_system_prompt(SAMPLE_PRODUCT)
-    assert "学长" in prompt or "学姐" in prompt
-    assert "阿坝师范学院" in prompt
-    assert "QQ" in prompt
+    assert "阿坝师范" in prompt
+    assert "返5块" in prompt
+    assert "拉一个" in prompt
+    assert "薄利多销" in prompt
+    assert "别给其他销售说" in prompt
 
 
 def test_build_messages_structure():

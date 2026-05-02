@@ -12,6 +12,9 @@ product:
     - "150GB全国通用流量"
     - "600GB校园区域流量（教学楼、宿舍、食堂均可使用）"
   target: "阿坝师范学院新生"
+  reward:
+    cashback: 5
+    referral: 5
   faq:
     - q: "可以开热点吗？"
       a: "可以，流量不限制"

@@ -30,10 +30,13 @@ class MessageHandler:
         self._rate_limit: Dict[str, float] = defaultdict(float)
         self.rate_limit_interval = 1.0
 
-        # Purchase intent keywords (with word-boundary matching for Chinese)
+        # Remark cache: user_id -> remark (只查一次，后续复用)
+        self._remark_cache: Dict[str, str] = {}
+
+        # Purchase intent keywords
         self.purchase_keywords = ["办卡", "买卡", "下单", "怎么办理", "怎么买"]
         self.purchase_fallbacks = ["办", "买", "要"]
-        self.purchase_fallback_min_len = 6  # only apply fallbacks for longer messages
+        self.purchase_fallback_min_len = 6
 
     async def handle(self, payload: dict) -> None:
         """Process an incoming OneBot v11 message event."""
@@ -50,9 +53,9 @@ class MessageHandler:
         if self_id and self_id == user_id:
             return
 
-        # Only respond to users whose ID starts with A (case-insensitive)
+        # Remark filter: only respond to users whose remark starts with A
         user_key = str(user_id)
-        if not user_key.upper().startswith("A"):
+        if not await self._check_remark(user_key, payload):
             return
 
         if msg_type == "group":
@@ -79,6 +82,14 @@ class MessageHandler:
         if not reply:
             return
 
+        # First message: ~15s, subsequent: based on typing speed, max 30s
+        if self.session_mgr.is_first_interaction(user_key):
+            await asyncio.sleep(random.uniform(12, 18))
+        else:
+            speed = random.uniform(40, 60)
+            delay = min((len(reply) / speed) * 60, 30)
+            await asyncio.sleep(delay)
+
         if self._is_purchase_intent(message):
             order_result = self.order_stub.create_order(user_key, "campus_card")
             reply += f"\n\n{order_result['message']}"
@@ -87,6 +98,49 @@ class MessageHandler:
         self.session_mgr.add_message(user_key, "assistant", reply)
 
         await self._send_reply(user_id, group_id, msg_type, reply)
+
+    async def _check_remark(self, user_key: str, payload: dict) -> bool:
+        """Check if user's remark starts with A. Returns True to allow."""
+        # Check cache first
+        if user_key in self._remark_cache:
+            remark = self._remark_cache[user_key]
+            if not remark.upper().startswith("A"):
+                logger.info(f"Ignored user {user_key}: cached remark='{remark}' not A")
+                return False
+            return True
+
+        # Try sender.remark from payload
+        sender = payload.get("sender", {})
+        remark = sender.get("remark", "")
+        if remark:
+            self._remark_cache[user_key] = remark
+            if not remark.upper().startswith("A"):
+                logger.info(f"Ignored user {user_key}: remark='{remark}' not A")
+                return False
+            return True
+
+        # Try to fetch via OneBot API
+        user_id = payload.get("user_id")
+        if user_id:
+            try:
+                resp = await self.ws_adapter.call_action(
+                    "get_stranger_info",
+                    {"user_id": user_id},
+                    timeout=5,
+                )
+                if resp and resp.get("data"):
+                    remark = resp["data"].get("remark", "")
+                    self._remark_cache[user_key] = remark
+                    if not remark.upper().startswith("A"):
+                        logger.info(f"Ignored user {user_key}: api remark='{remark}' not A")
+                        return False
+                    return True
+            except Exception:
+                logger.exception(f"Failed to fetch stranger info for {user_key}")
+
+        # Can't determine remark — block to be safe
+        logger.info(f"Ignored user {user_key}: cannot determine remark")
+        return False
 
     def _is_purchase_intent(self, message: str) -> bool:
         """Detect purchase intent with precise matching."""
@@ -101,22 +155,7 @@ class MessageHandler:
 
     async def _send_reply(self, user_id: int, group_id: Optional[int],
                           msg_type: Optional[str], reply: str) -> None:
-        settings = self.config.get("human_like", {})
-        split_enabled = settings.get("enable_message_split", True)
-        max_len = settings.get("max_segment_length", 80)
-        base_delay = settings.get("split_delay", 0.8)
-
-        if split_enabled and len(reply) > max_len:
-            segments = self._split_message(reply, max_len)
-            for i, seg in enumerate(segments):
-                stripped = seg.strip()
-                if stripped:
-                    await self._send(user_id, group_id, msg_type, stripped)
-                    if i < len(segments) - 1:
-                        jitter = random.uniform(-0.3, 0.3)
-                        await asyncio.sleep(max(0.3, base_delay + jitter))
-        else:
-            await self._send(user_id, group_id, msg_type, reply)
+        await self._send(user_id, group_id, msg_type, reply)
 
     async def _send(self, user_id: int, group_id: Optional[int],
                     msg_type: Optional[str], text: str) -> None:
