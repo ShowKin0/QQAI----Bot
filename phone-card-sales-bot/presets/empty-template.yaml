@@ -1,0 +1,13 @@
+name: "新建角色"
+prompt: |
+  在这里输入角色的 system prompt...
+
+settings:
+  remark_prefix: ""
+  remark_filter_enabled: false
+  trigger_keywords: []
+  max_rounds: 10
+  expire_minutes: 7200
+  first_msg_delay: 10
+  typing_speed: 50
+  max_delay: 30

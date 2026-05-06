@@ -21,38 +21,54 @@ class NapCatWSAdapter:
         self._ws: Optional[WebSocketServerProtocol] = None
         self.on_message: Optional[Callable[[dict], Awaitable[None]]] = None
         self._pending: Dict[str, asyncio.Future] = {}
+        self._conn_id = 0  # prevent stale handlers from clobbering _ws
 
     async def start(self) -> None:
         """Start WebSocket server and wait for NapCatQQ connection."""
 
         async def handler(websocket: WebSocketServerProtocol):
+            self._conn_id += 1
+            conn_id = self._conn_id
             self._ws = websocket
-            logger.info("NapCatQQ connected")
+            logger.info(f"[{conn_id}] NapCatQQ connected")
             try:
                 async for raw in websocket:
                     try:
                         data = json.loads(raw)
                     except json.JSONDecodeError:
-                        logger.warning("Received malformed JSON from NapCatQQ, skipping")
+                        logger.warning(f"[{conn_id}] Received malformed JSON, skipping")
                         continue
 
-                    # Check if this is a response to a pending action
                     echo = data.get("echo")
                     if echo and echo in self._pending:
                         future = self._pending.pop(echo)
                         future.set_result(data)
                         continue
 
-                    logger.debug("Received: %s", data)
+                    logger.debug(f"[{conn_id}] Received: post_type={data.get('post_type')}, "
+                                 f"msg_type={data.get('message_type')}, "
+                                 f"user_id={data.get('user_id')}")
                     if self.on_message:
                         asyncio.create_task(self._safe_handle(data))
             except websockets.exceptions.WebSocketException:
-                logger.warning("NapCatQQ connection lost")
-                self._ws = None
+                logger.warning(f"[{conn_id}] NapCatQQ connection lost")
+                # Only clobber _ws if we're still the active connection
+                if self._conn_id == conn_id:
+                    self._ws = None
+                    self._fail_pending()
+                else:
+                    logger.debug(f"[{conn_id}] stale connection, ignored")
 
         async with websockets.serve(handler, self.host, self.port):
             logger.info(f"WS server started on ws://{self.host}:{self.port}{self.path}")
             await asyncio.Future()  # run forever
+
+    def _fail_pending(self) -> None:
+        """Fail all pending actions when connection drops."""
+        for echo, future in list(self._pending.items()):
+            if not future.done():
+                future.set_exception(ConnectionError("NapCatQQ disconnected"))
+            del self._pending[echo]
 
     async def _safe_handle(self, data: dict) -> None:
         """Call on_message callback, catching and logging exceptions."""

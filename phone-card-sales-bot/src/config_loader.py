@@ -32,6 +32,11 @@ def load_config(base_dir: str | Path = ".") -> Dict[str, Any]:
     return {"settings": settings, "product": product}
 
 
+def merge_env_vars(obj: Any) -> None:
+    """Resolve ${VAR_NAME} placeholders in-place, ignoring missing vars."""
+    _resolve_env_vars(obj)
+
+
 def _resolve_env_vars(obj: Any) -> List[str]:
     """Resolve ${VAR_NAME} placeholders. Returns list of missing env vars."""
     missing: List[str] = []

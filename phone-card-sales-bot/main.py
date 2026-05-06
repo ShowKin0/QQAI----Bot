@@ -1,16 +1,17 @@
 import asyncio
 import logging
 import signal
+import webbrowser
 from pathlib import Path
 
+import uvicorn
 from dotenv import load_dotenv
 
 from src.adapter.websocket_client import NapCatWSAdapter
 from src.ai.service import AIService
 from src.config_loader import load_config, ConfigError
 from src.handler.message import MessageHandler
-from src.order.stub import OrderStub
-from src.session.manager import SessionManager
+from webui import app as web_app
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +23,6 @@ _shutdown_event = asyncio.Event()
 
 
 def _handle_signal():
-    """Signal handler to trigger graceful shutdown."""
     logger.info("Received shutdown signal, shutting down gracefully...")
     _shutdown_event.set()
 
@@ -53,28 +53,27 @@ def main():
         max_tokens=settings["llm"].get("max_tokens", 1024),
     )
 
-    session_mgr = SessionManager(
-        max_rounds=settings["session"].get("max_rounds", 10),
-        expire_minutes=settings["session"].get("expire_minutes", 30),
-    )
-
-    order_stub = OrderStub()
-    product = config["product"]
-
     handler = MessageHandler(
-        session_mgr=session_mgr,
         ai_service=ai_service,
-        order_stub=order_stub,
         ws_adapter=ws_adapter,
-        product=product,
-        config=settings,
     )
 
     ws_adapter.on_message = handler.handle
 
-    logger.info("Starting Phone Card Sales Bot...")
-    logger.info(f"LLM: {settings['llm']['model']} @ {settings['llm']['base_url']}")
-    logger.info(f"WS server: ws://{settings['server']['host']}:{settings['server']['port']}{settings['server'].get('ws_path', '/onebot/v11/ws')}")
+    logger.info("=" * 50)
+    logger.info("  QQ Bot 启动中...")
+    logger.info(f"  LLM: {settings['llm']['model']}")
+    logger.info(f"  WS 服务: ws://{settings['server']['host']}:{settings['server']['port']}{settings['server'].get('ws_path', '/onebot/v11/ws')}")
+    logger.info(f"  管理面板: http://localhost:8767")
+    logger.info("=" * 50)
+
+    # Auto open browser after a short delay
+    def _open_browser():
+        import time
+        time.sleep(1.5)
+        webbrowser.open("http://localhost:8767")
+    import threading
+    threading.Thread(target=_open_browser, daemon=True).start()
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -83,30 +82,35 @@ def main():
         try:
             loop.add_signal_handler(sig, _handle_signal)
         except NotImplementedError:
-            # Windows doesn't support add_signal_handler
             pass
 
     try:
-        # Run until shutdown is requested
-        async def run_until_shutdown():
+        async def run():
             ws_task = asyncio.create_task(ws_adapter.start())
+
+            web_config = uvicorn.Config(web_app, host="0.0.0.0", port=8767,
+                                        log_level="warning")
+            web_server = uvicorn.Server(web_config)
+            web_task = asyncio.create_task(web_server.serve())
+
             done, pending = await asyncio.wait(
-                [ws_task, asyncio.create_task(_shutdown_event.wait())],
+                [ws_task, web_task, asyncio.create_task(_shutdown_event.wait())],
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            # Cancel remaining tasks
             for task in pending:
                 task.cancel()
                 try:
                     await task
-                except asyncio.CancelledError:
+                except (asyncio.CancelledError, KeyboardInterrupt):
                     pass
             await ai_service.close()
 
-        loop.run_until_complete(run_until_shutdown())
+        loop.run_until_complete(run())
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         loop.run_until_complete(ai_service.close())
+    except Exception:
+        logger.exception("Unexpected error")
     finally:
         loop.close()
 
