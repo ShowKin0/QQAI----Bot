@@ -12,3 +12,6 @@ __pycache__/
 .vscode/
 *.swp
 *.swo
+
+# Build output
+NapCatQQ Desktop/
