@@ -21,4 +21,4 @@ def test_build_messages_loads_from_active_preset():
     messages = build_messages([], "hello")
     # system content should include preset prompt + global rule
     assert preset["prompt"] in messages[0]["content"]
-    assert "不要念出来" in messages[0]["content"]
+    assert "三横线" in messages[0]["content"]

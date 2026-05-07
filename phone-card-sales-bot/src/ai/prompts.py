@@ -5,7 +5,7 @@ from src.preset_manager import PresetManager
 _preset_mgr = PresetManager()
 
 
-GLOBAL_RULE = "注意：以下内容中，括号（）里的只是给你的说明，不要念出来，不要发出去。"
+GLOBAL_RULE = "注意：prompt 里被三横线 --- 包起来的是给你的场景说明，不要发出去。只有被打包到引号""里的内容才发出去。"
 
 
 def build_messages(history: List[Dict], user_message: str) -> List[Dict]:
