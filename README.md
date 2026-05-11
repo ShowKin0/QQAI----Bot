@@ -70,6 +70,8 @@ cp .env.example .env
 }
 ```
 
+或者进入BOT调试界面，添加QQ账号后点设置在连接配置中的WebSocket 客户端设置中填入`ws://127.0.0.1:8765/onebot/v11/ws`
+
 ### 启动
 
 ```bash
@@ -85,15 +87,15 @@ python main.py
 
 ### `config/settings.yaml`
 
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `server.host` | WS 服务监听地址 | `0.0.0.0` |
-| `server.port` | WS 服务端口 | `8765` |
-| `llm.api_key` | LLM API 密钥 | `${LLM_API_KEY}` |
-| `llm.base_url` | LLM API 地址 | `${LLM_BASE_URL}` |
-| `llm.model` | 模型名称 | `deepseek-chat` |
-| `session.max_rounds` | 最大对话轮数 | `10` |
-| `session.expire_minutes` | 会话过期时间 | `7200` |
+| 配置项                   | 说明            | 默认值            |
+| ------------------------ | --------------- | ----------------- |
+| `server.host`            | WS 服务监听地址 | `0.0.0.0`         |
+| `server.port`            | WS 服务端口     | `8765`            |
+| `llm.api_key`            | LLM API 密钥    | `${LLM_API_KEY}`  |
+| `llm.base_url`           | LLM API 地址    | `${LLM_BASE_URL}` |
+| `llm.model`              | 模型名称        | `deepseek-chat`   |
+| `session.max_rounds`     | 最大对话轮数    | `10`              |
+| `session.expire_minutes` | 会话过期时间    | `7200`            |
 
 ### `config/product.yaml`
 
@@ -110,11 +112,11 @@ python main.py
 
 内置预设示例：
 
-| 预设 | 说明 |
-|------|------|
-| `phone-card-sales` | 校园电话卡销售（学长/学姐人设，附带阶段性话术和返现策略） |
-| `psychology-teacher` | 心理老师角色 |
-| `empty-template` | 空白模板，可自由定义 |
+| 预设                 | 说明                                                      |
+| -------------------- | --------------------------------------------------------- |
+| `phone-card-sales`   | 校园电话卡销售（学长/学姐人设，附带阶段性话术和返现策略） |
+| `psychology-teacher` | 心理老师角色                                              |
+| `empty-template`     | 空白模板，可自由定义                                      |
 
 每个预设独立配置：角色提示词、触发关键词、备注过滤前缀、最大对话轮数、会话过期时间、首条延迟、打字速度、最大延迟等。
 
