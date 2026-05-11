@@ -97,8 +97,8 @@ prompt: '【身份与态度】
 
   注意：不管聊什么，最终目的都是推动办卡或拉人。'
 settings:
-  remark_prefix: ''
-  remark_filter_enabled: false
+  remark_prefix: A
+  remark_filter_enabled: true
   trigger_keywords:
   - 卡
   - 流量

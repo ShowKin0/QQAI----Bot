@@ -52,11 +52,10 @@ class MessageHandler:
             logger.info(f"MSG blocked by remark filter: user={user_id}")
             return
 
-        # Group message filter
+        # Ignore all group messages
         if msg_type == "group":
-            if not self._should_respond(payload, message, settings):
-                logger.info(f"MSG blocked by group filter: user={user_id}")
-                return
+            logger.info(f"MSG ignored (group): user={user_id}")
+            return
 
         # Rate limit
         now = time.time()
